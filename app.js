@@ -578,10 +578,10 @@
             window.JsBarcode(svg, p.b, {
               format: useEAN13 ? 'EAN13' : 'CODE128',
               lineColor: '#1a1a18',
-              width: 1.5,
-              height: 35,
-              fontSize: 9,
-              margin: 2,
+              width: 1.7,
+              height: 40,
+              fontSize: 10,
+              margin: 3,
               background: 'transparent'
             });
           } catch (err) {
