@@ -365,13 +365,13 @@
   }
 
   function handleBulkSearch(text) {
-    // Split by newlines, commas, semicolons
-    const codes = text
-      .split(/[\n,;]+/)
-      .map((c) => c.trim())
-      .filter((c) => c.length > 0);
+    // Parse space-separated codes or comma/semicolon separated
+    const segments = text
+      .split(/[\s,;]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
 
-    if (!codes.length) {
+    if (!segments.length) {
       showToast('Введите коды товара');
       return;
     }
@@ -379,22 +379,27 @@
     const found = [];
     const notFound = [];
 
-    for (const code of codes) {
-      const p = byCode.get(normalizeCode(code)) || byBarcode.get(normalizeCode(code));
+    // For each segment, try to find it as a product code
+    for (const segment of segments) {
+      const normalized = normalizeCode(segment);
+      const p = byCode.get(normalized) || byBarcode.get(normalized);
+      
       if (p) {
         found.push(p);
         pushHistory(p);
       } else {
-        notFound.push(code);
+        notFound.push(segment);
       }
     }
 
     if (found.length) {
       renderBulkBarcodes(found);
+    } else {
+      showToast('Коды не найдены в базе');
     }
 
-    if (notFound.length) {
-      showToast(`Не найдено: ${notFound.slice(0, 3).join(', ')}${notFound.length > 3 ? '...' : ''}`);
+    if (notFound.length && found.length > 0) {
+      showToast(`Найдено: ${found.length}, не найдено: ${notFound.length}`);
     }
 
     closeSuggestions();
@@ -519,46 +524,78 @@
     if (!container) return;
 
     container.innerHTML = '';
-    for (const p of products) {
-      const card = document.createElement('div');
-      card.className = 'bulk-barcode-card';
+    const itemsPerPage = 50;
+    const colsPerPage = 10;
+    const rowsPerPage = 5;
+
+    // Group products into pages
+    const pages = [];
+    for (let i = 0; i < products.length; i += itemsPerPage) {
+      pages.push(products.slice(i, i + itemsPerPage));
+    }
+
+    // Create a page for each group
+    for (let pageNum = 0; pageNum < pages.length; pageNum++) {
+      const page = pages[pageNum];
+      const pageDiv = document.createElement('div');
+      pageDiv.className = 'bulk-page';
+      pageDiv.setAttribute('data-page', pageNum + 1);
+
+      // Create grid
+      const grid = document.createElement('div');
+      grid.className = 'bulk-grid';
       
-      const codeName = document.createElement('div');
-      codeName.className = 'bulk-barcode-card-code';
-      codeName.textContent = p.c;
-      
-      const name = document.createElement('div');
-      name.className = 'bulk-barcode-card-name';
-      name.textContent = p.n;
-      
-      const svgWrapper = document.createElement('div');
-      svgWrapper.style.width = '100%';
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svgWrapper.appendChild(svg);
-      
-      card.appendChild(codeName);
-      card.appendChild(name);
-      card.appendChild(svgWrapper);
-      container.appendChild(card);
-      
-      // Draw barcode on this specific SVG
-      if (p.b) {
-        try {
-          await ensureJsBarcode();
-          const useEAN13 = isValidEAN13(p.b);
-          window.JsBarcode(svg, p.b, {
-            format: useEAN13 ? 'EAN13' : 'CODE128',
-            lineColor: '#1a1a18',
-            width: 2,
-            height: 50,
-            fontSize: 12,
-            margin: 4,
-            background: 'transparent'
-          });
-        } catch (err) {
-          console.error('Ошибка генерации штрихкода:', err);
+      for (const p of page) {
+        const card = document.createElement('div');
+        card.className = 'bulk-barcode-card-compact';
+        
+        const code = document.createElement('div');
+        code.className = 'bulk-card-code-compact';
+        code.textContent = p.c;
+        
+        const name = document.createElement('div');
+        name.className = 'bulk-card-name-compact';
+        name.textContent = p.n;
+        
+        const svgWrapper = document.createElement('div');
+        svgWrapper.className = 'bulk-card-svg-wrapper';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgWrapper.appendChild(svg);
+        
+        card.appendChild(code);
+        card.appendChild(name);
+        card.appendChild(svgWrapper);
+        grid.appendChild(card);
+        
+        // Draw barcode on this specific SVG
+        if (p.b) {
+          try {
+            await ensureJsBarcode();
+            const useEAN13 = isValidEAN13(p.b);
+            window.JsBarcode(svg, p.b, {
+              format: useEAN13 ? 'EAN13' : 'CODE128',
+              lineColor: '#1a1a18',
+              width: 1.5,
+              height: 35,
+              fontSize: 9,
+              margin: 2,
+              background: 'transparent'
+            });
+          } catch (err) {
+            console.error('Ошибка генерации штрихкода:', err);
+          }
         }
       }
+      
+      pageDiv.appendChild(grid);
+      
+      // Add page number
+      const pageNum = document.createElement('div');
+      pageNum.className = 'bulk-page-number';
+      pageNum.textContent = `Страница ${pages.length > 1 ? pageNum + 1 + '/' + pages.length : ''}`;
+      pageDiv.appendChild(pageNum);
+      
+      container.appendChild(pageDiv);
     }
     
     openBulkModal();
