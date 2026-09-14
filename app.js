@@ -13,6 +13,7 @@
   let currentProduct = null;
   let activeSuggestionIndex = -1;
   let currentSuggestions = [];
+  let bulkMode = false;     // toggle for bulk input mode
 
   // ---------- DOM refs ----------
   const el = (id) => document.getElementById(id);
@@ -341,6 +342,14 @@
   function handleSearchSubmit() {
     const val = searchInput().value.trim();
     if (!val) return;
+
+    if (bulkMode) {
+      // Bulk mode: parse multiple codes
+      handleBulkSearch(val);
+      return;
+    }
+
+    // Single mode
     if (currentSuggestions.length && activeSuggestionIndex >= 0) {
       chooseSuggestion(activeSuggestionIndex);
       return;
@@ -353,6 +362,44 @@
       showNotFound(val);
     }
     closeSuggestions();
+  }
+
+  function handleBulkSearch(text) {
+    // Split by newlines, commas, semicolons
+    const codes = text
+      .split(/[\n,;]+/)
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
+
+    if (!codes.length) {
+      showToast('Введите коды товара');
+      return;
+    }
+
+    const found = [];
+    const notFound = [];
+
+    for (const code of codes) {
+      const p = byCode.get(normalizeCode(code)) || byBarcode.get(normalizeCode(code));
+      if (p) {
+        found.push(p);
+        pushHistory(p);
+      } else {
+        notFound.push(code);
+      }
+    }
+
+    if (found.length) {
+      renderBulkBarcodes(found);
+    }
+
+    if (notFound.length) {
+      showToast(`Не найдено: ${notFound.slice(0, 3).join(', ')}${notFound.length > 3 ? '...' : ''}`);
+    }
+
+    closeSuggestions();
+    emptyState().classList.remove('visible');
+    resultCard().classList.remove('visible');
   }
 
   function showNotFound(query) {
@@ -442,6 +489,79 @@
     if (!m) return;
     m.classList.remove('modal-open');
     document.body.classList.remove('modal-lock');
+  }
+
+  // ---------- Bulk modal (multiple barcodes) ----------
+
+  function bulkModalOverlay() { return el('bulk-modal'); }
+
+  function isBulkModalOpen() {
+    const m = bulkModalOverlay();
+    return !!m && m.classList.contains('modal-open');
+  }
+
+  function openBulkModal() {
+    const m = bulkModalOverlay();
+    if (!m) return;
+    m.classList.add('modal-open');
+    document.body.classList.add('modal-lock');
+  }
+
+  function closeBulkModal() {
+    const m = bulkModalOverlay();
+    if (!m) return;
+    m.classList.remove('modal-open');
+    document.body.classList.remove('modal-lock');
+  }
+
+  async function renderBulkBarcodes(products) {
+    const container = el('bulk-barcodes-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    for (const p of products) {
+      const card = document.createElement('div');
+      card.className = 'bulk-barcode-card';
+      
+      const codeName = document.createElement('div');
+      codeName.className = 'bulk-barcode-card-code';
+      codeName.textContent = p.c;
+      
+      const name = document.createElement('div');
+      name.className = 'bulk-barcode-card-name';
+      name.textContent = p.n;
+      
+      const svgWrapper = document.createElement('div');
+      svgWrapper.style.width = '100%';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svgWrapper.appendChild(svg);
+      
+      card.appendChild(codeName);
+      card.appendChild(name);
+      card.appendChild(svgWrapper);
+      container.appendChild(card);
+      
+      // Draw barcode on this specific SVG
+      if (p.b) {
+        try {
+          await ensureJsBarcode();
+          const useEAN13 = isValidEAN13(p.b);
+          window.JsBarcode(svg, p.b, {
+            format: useEAN13 ? 'EAN13' : 'CODE128',
+            lineColor: '#1a1a18',
+            width: 2,
+            height: 50,
+            fontSize: 12,
+            margin: 4,
+            background: 'transparent'
+          });
+        } catch (err) {
+          console.error('Ошибка генерации штрихкода:', err);
+        }
+      }
+    }
+    
+    openBulkModal();
   }
 
   async function drawBarcode(code) {
@@ -648,8 +768,28 @@
     modalOverlay().addEventListener('click', (e) => {
       if (e.target === modalOverlay()) closeModal();
     });
+    
+    // Bulk modal
+    el('bulk-modal-close-btn').addEventListener('click', closeBulkModal);
+    bulkModalOverlay().addEventListener('click', (e) => {
+      if (e.target === bulkModalOverlay()) closeBulkModal();
+    });
+    el('bulk-mode-toggle').addEventListener('change', (e) => {
+      bulkMode = e.target.checked;
+      if (bulkMode) {
+        searchInput().placeholder = 'Введите коды через запятую или перевод строки…';
+        showToast('Режим массового ввода включен');
+      } else {
+        searchInput().placeholder = 'Код товара, штрихкод или название…';
+        showToast('Режим массового ввода отключен');
+      }
+    });
+    
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isModalOpen()) closeModal();
+      if (e.key === 'Escape') {
+        if (isBulkModalOpen()) closeBulkModal();
+        else if (isModalOpen()) closeModal();
+      }
     });
   }
 
