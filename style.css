@@ -160,6 +160,27 @@
   .submit-search-btn:hover { background: #ffc72c; }
   .submit-search-btn:active { background: var(--amber-dim); }
 
+  .bulk-search-box {
+    display: flex;
+    flex-direction: column;
+  }
+  .bulk-search-box textarea {
+    width: 100%;
+    min-height: 140px;
+    resize: vertical;
+    background: var(--panel);
+    border: 1.5px solid var(--border);
+    padding: 12px 14px;
+    color: var(--text-hi);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .bulk-search-box textarea:focus { border-color: var(--amber); }
+  .bulk-search-box textarea::placeholder { color: var(--muted-2); font-family: var(--sans); }
+
   .suggestions {
     position: absolute;
     top: calc(100% + 6px);

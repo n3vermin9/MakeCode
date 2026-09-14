@@ -18,6 +18,9 @@
   // ---------- DOM refs ----------
   const el = (id) => document.getElementById(id);
   const searchInput = () => el('search-input');
+  const bulkSearchInput = () => el('bulk-search-input');
+  const singleSearchBox = () => el('single-search-box');
+  const bulkSearchBox = () => el('bulk-search-box');
   const suggestionsBox = () => el('suggestions');
   const clearBtn = () => el('clear-btn');
   const resultCard = () => el('result-card');
@@ -340,16 +343,16 @@
   }
 
   function handleSearchSubmit() {
-    const val = searchInput().value.trim();
-    if (!val) return;
-
     if (bulkMode) {
-      // Bulk mode: parse multiple codes
+      const val = bulkSearchInput().value.trim();
+      if (!val) return;
       handleBulkSearch(val);
       return;
     }
 
-    // Single mode
+    const val = searchInput().value.trim();
+    if (!val) return;
+
     if (currentSuggestions.length && activeSuggestionIndex >= 0) {
       chooseSuggestion(activeSuggestionIndex);
       return;
@@ -590,10 +593,10 @@
       pageDiv.appendChild(grid);
       
       // Add page number
-      const pageNum = document.createElement('div');
-      pageNum.className = 'bulk-page-number';
-      pageNum.textContent = `Страница ${pages.length > 1 ? pageNum + 1 + '/' + pages.length : ''}`;
-      pageDiv.appendChild(pageNum);
+      const pageNumEl = document.createElement('div');
+      pageNumEl.className = 'bulk-page-number';
+      pageNumEl.textContent = `Страница ${pages.length > 1 ? pageNum + 1 + '/' + pages.length : ''}`;
+      pageDiv.appendChild(pageNumEl);
       
       container.appendChild(pageDiv);
     }
@@ -797,6 +800,13 @@
 
     clearBtn().addEventListener('click', clearSearch);
     el('submit-search-btn').addEventListener('click', handleSearchSubmit);
+    el('bulk-submit-btn').addEventListener('click', handleSearchSubmit);
+    bulkSearchInput().addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleSearchSubmit();
+      }
+    });
     el('show-barcode-btn').addEventListener('click', showBarcodeModal);
     el('copy-btn').addEventListener('click', copyBarcode);
     el('print-btn').addEventListener('click', printLabel);
@@ -813,12 +823,17 @@
     });
     el('bulk-mode-toggle').addEventListener('change', (e) => {
       bulkMode = e.target.checked;
+      closeSuggestions();
       if (bulkMode) {
-        searchInput().placeholder = 'Введите коды через запятую или перевод строки…';
-        showToast('Режим массового ввода включен');
+        singleSearchBox().style.display = 'none';
+        bulkSearchBox().style.display = 'flex';
+        bulkSearchInput().focus();
+        showToast('Режим массового ввода включён');
       } else {
-        searchInput().placeholder = 'Код товара, штрихкод или название…';
-        showToast('Режим массового ввода отключен');
+        singleSearchBox().style.display = 'flex';
+        bulkSearchBox().style.display = 'none';
+        searchInput().focus();
+        showToast('Режим массового ввода отключён');
       }
     });
     
